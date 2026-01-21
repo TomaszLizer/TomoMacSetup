@@ -1,0 +1,116 @@
+# ~/.zshrc - runs for every interactive shell
+# Optimized for fast startup (~150-200ms)
+
+# ============== Locale ==============
+
+export LANG=en_US.UTF-8
+export LC_ALL=en_US.UTF-8
+
+# ============== History ==============
+
+HISTFILE=$HOME/.zsh_history
+HISTSIZE=100000
+SAVEHIST=$HISTSIZE
+setopt HIST_IGNORE_DUPS
+setopt HIST_IGNORE_SPACE
+setopt SHARE_HISTORY
+
+# ============== Mise (Version Manager) ==============
+# Replaces nvm, rbenv, jenv, pyenv - single fast init (~20ms)
+
+if command -v mise &> /dev/null; then
+    eval "$(mise activate zsh)"
+fi
+
+# ============== Completion Configuration ==============
+# Replaces old completion.zsh with working, minimal config
+
+# Options
+setopt auto_menu           # Show menu on second tab
+setopt complete_in_word    # Complete from cursor position
+setopt always_to_end       # Move cursor to end after completion
+WORDCHARS=''               # Better word boundaries for Ctrl+W
+
+# Styling
+zstyle ':completion:*' menu select                          # Interactive menu
+zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'   # Case insensitive
+zstyle ':completion:*' special-dirs true                    # Complete . and ..
+zstyle ':completion:*' list-colors ''                       # Default colors
+zstyle ':completion:*' use-cache yes                        # Enable cache
+zstyle ':completion:*' cache-path "$HOME/.zcompcache"       # Working cache path
+
+# Load completion module
+zmodload -i zsh/complist
+
+# Add Homebrew completions to fpath (BEFORE compinit)
+if type brew &>/dev/null; then
+    fpath=($(brew --prefix)/share/zsh-completions $fpath)
+fi
+
+# Cached compinit - only regenerate if older than 24 hours
+autoload -Uz compinit
+if [[ -n ~/.zcompdump(#qN.mh+24) ]]; then
+    compinit
+else
+    compinit -C
+fi
+
+# ============== Plugins (via Homebrew) ==============
+# Must be AFTER compinit
+
+if type brew &>/dev/null; then
+    # Autosuggestions - fish-like suggestions
+    if [ -f "$(brew --prefix)/share/zsh-autosuggestions/zsh-autosuggestions.zsh" ]; then
+        source "$(brew --prefix)/share/zsh-autosuggestions/zsh-autosuggestions.zsh"
+    fi
+    
+    # Syntax highlighting - must be last plugin
+    if [ -f "$(brew --prefix)/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" ]; then
+        source "$(brew --prefix)/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
+    fi
+fi
+
+# ============== Prompt ==============
+
+if command -v starship &> /dev/null; then
+    eval "$(starship init zsh)"
+fi
+
+# ============== Tab Display Name ==============
+
+promptPreCmnd() {
+    # Set user/hostname in window title
+    echo -en "\033]0;$(whoami)@$(hostname) | $(pwd | cut -d "/" -f 2-100)\a"
+    # Tab name: directory
+    echo -en "\033]1;$(pwd | cut -d "/" -f 4-100)\a"
+}
+precmd_functions=(promptPreCmnd)
+
+# ============== Static Exports ==============
+# No subprocess calls - instant
+
+# Android SDK
+export ANDROID_HOME=~/Library/Android/sdk
+export PATH="$PATH:$ANDROID_HOME/platform-tools"
+
+# Xcode tools
+export PATH="$PATH:/Applications/Xcode.app/Contents/Developer/usr/bin"
+
+# Dart pub cache
+export PATH="$PATH:$HOME/.pub-cache/bin"
+
+# ============== Aliases ==============
+
+# General
+alias zshrc='code ~/.zshrc'
+alias xcode='open -a Xcode'
+alias clearClipboard='pbcopy < /dev/null'
+alias resetAudio='sudo pkill coreaudiod'
+
+# Projects / repos
+alias repos='cd ~/Workspace/Repositories'
+
+# Utility function to show dSYM UUIDs
+dsymUuids() {
+    for file in ./*; do dwarfdump -u "$file"; done
+}

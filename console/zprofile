@@ -1,0 +1,5 @@
+# ~/.zprofile - runs once per login session
+# This file sets up environment variables needed by all shells
+
+# Homebrew
+eval "$(/opt/homebrew/bin/brew shellenv)"

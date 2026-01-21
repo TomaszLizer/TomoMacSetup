@@ -1,80 +1,222 @@
-echo "Setting up your new Mac ;>"
+#!/bin/bash
 
-#setup console
-git clone https://github.com/zdharma/fast-syntax-highlighting.git ~/.zsh/plugins/fast-syntax-highlighting
-git clone https://github.com/zsh-users/zsh-autosuggestions.git ~/.zsh/plugins/zsh-autosuggestions
-cp console/completion.zsh ~/.zsh/plugins/
+# ============== App Lists ==============
 
-# ============== Installing Apps ==============
-
-# Setting up Homebrew
-if test ! $(which brew); then
-    echo "Installing homebrew..."
-    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-else
-    echo "Updating homebrew..."
-    brew update
-fi
-
-cliApps=(
-    starship # make console beautiful :)
-    rbenv
-    jenv
-    pyenv
+CLI_APPS=(
+    starship                              # Prompt - make console beautiful :)
+    mise                                  # Version manager (replaces nvm/rbenv/jenv/pyenv)
     swiftlint
     swift-format
-    peripheryapp/periphery/periphery # Swift dead code analysis
+    tuist
+    aria2
+    xcodes
+    peripheryapp/periphery/periphery      # Swift dead code analysis
+    zsh-syntax-highlighting               # ZSH plugin
+    zsh-autosuggestions                   # ZSH plugin
+    zsh-completions                       # ZSH completions
 )
 
-# Installing brew cli tools
-echo "Installing cli apps with brew"
-brew install --appdir="/Applications" ${cliApps[@]}
-
-caskApps=(
-    fork # Best git GUI ever
+CASK_APPS=(
+    fork                      # Best git GUI ever
+    iterm2                    # Primary terminal
     slack
-    iterm2 # 
-    isimulator # iOS simulator menu bar helper
     postman
-    itsycal # menu bar calendar
+    itsycal                   # Menu bar calendar
+    betterdisplay
     setapp
     visual-studio-code
     google-chrome
 )
 
-# Installing apps with brew cask
-echo "Installing apps with brew cask"
-brew install --cask --appdir="/Applications" ${caskApps[@]}
+# ============== Colors & UI Helpers ==============
 
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+BOLD='\033[1m'
+NC='\033[0m' # No Color
 
-# ============== System settings ==============
+# Section header
+section() {
+    echo ""
+    echo "${BOLD}━━━ $1 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+}
 
-# Showing all filename extensions in Finder by default
+# Spinner function - shows rotating animation while command runs
+spin() {
+    local pid=$1
+    local msg=$2
+    local spinchars='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+    local i=0
+    
+    while kill -0 "$pid" 2>/dev/null; do
+        printf "\r${BLUE}${spinchars:i++%${#spinchars}:1}${NC} %s" "$msg"
+        sleep 0.1
+    done
+    
+    wait "$pid"
+    return $?
+}
+
+# Run command with spinner
+run_with_spinner() {
+    local msg="$1"
+    shift
+    
+    # Run command in background, capture output
+    "$@" > /tmp/setup_output.log 2>&1 &
+    local pid=$!
+    
+    spin "$pid" "$msg"
+    local exit_code=$?
+    
+    if [ $exit_code -eq 0 ]; then
+        printf "\r${GREEN}✓${NC} %s\n" "$msg"
+    else
+        printf "\r${RED}✗${NC} %s\n" "$msg"
+        echo "${YELLOW}  └─ See /tmp/setup_output.log for details${NC}"
+    fi
+    
+    return $exit_code
+}
+
+# Simple success/fail messages (for non-background tasks)
+success() {
+    echo "${GREEN}✓${NC} $1"
+}
+
+fail() {
+    echo "${RED}✗${NC} $1"
+}
+
+# ============== Install Functions ==============
+
+install_formula() {
+    local pkg="$1"
+    run_with_spinner "Installing $pkg" brew install "$pkg"
+}
+
+install_cask() {
+    local app="$1"
+    run_with_spinner "Installing $app" brew install --cask "$app"
+}
+
+# ============== Main Setup ==============
+
+echo ""
+echo "🍎 ${BOLD}Setting up your new Mac...${NC}"
+
+# ============== Homebrew ==============
+
+section "Homebrew"
+
+if ! command -v brew &> /dev/null; then
+    echo "${BLUE}⠋${NC} Installing Homebrew..."
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    
+    if [ $? -eq 0 ]; then
+        success "Installing Homebrew"
+    else
+        fail "Installing Homebrew"
+        echo "${RED}Cannot continue without Homebrew. Exiting.${NC}"
+        exit 1
+    fi
+else
+    success "Homebrew already installed"
+    run_with_spinner "Updating Homebrew" brew update
+fi
+
+# Add Homebrew to current session
+eval "$(/opt/homebrew/bin/brew shellenv)"
+
+# Persist to ~/.zprofile if not already there
+if ! grep -q 'brew shellenv' ~/.zprofile 2>/dev/null; then
+    echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
+    success "Configured shell environment"
+else
+    success "Shell environment already configured"
+fi
+
+# ============== CLI Tools ==============
+
+section "CLI Tools"
+
+for pkg in "${CLI_APPS[@]}"; do
+    install_formula "$pkg"
+done
+
+# ============== Applications ==============
+
+section "Applications"
+
+for app in "${CASK_APPS[@]}"; do
+    install_cask "$app"
+done
+
+# ============== Shell Configuration ==============
+
+section "Shell Configuration"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Create ~/.zsh directory if it doesn't exist
+mkdir -p ~/.zsh
+
+# Copy zprofile
+if [ -f "$SCRIPT_DIR/console/zprofile" ]; then
+    cp "$SCRIPT_DIR/console/zprofile" ~/.zprofile
+    success "Creating ~/.zprofile"
+else
+    fail "console/zprofile not found"
+fi
+
+# Copy zshrc
+if [ -f "$SCRIPT_DIR/console/zshrc" ]; then
+    cp "$SCRIPT_DIR/console/zshrc" ~/.zshrc
+    success "Creating ~/.zshrc"
+else
+    fail "console/zshrc not found"
+fi
+
+# Import iTerm2 profile via Dynamic Profiles (auto-loads on iTerm startup)
+if [ -f "$SCRIPT_DIR/console/Tomo-iTerm_profile.json" ]; then
+    ITERM_DYNAMIC_PROFILES="$HOME/Library/Application Support/iTerm2/DynamicProfiles"
+    mkdir -p "$ITERM_DYNAMIC_PROFILES"
+    cp "$SCRIPT_DIR/console/Tomo-iTerm_profile.json" "$ITERM_DYNAMIC_PROFILES/"
+    success "Importing iTerm2 profile"
+fi
+
+# ============== macOS Settings ==============
+
+section "macOS Settings"
+
+# Finder settings
 defaults write NSGlobalDomain AppleShowAllExtensions -bool true
-
-# Disabling the warning when changing a file extension
 defaults write com.apple.finder FXEnableExtensionChangeWarning -bool false
-
-# Changes Finder to List View
-# Four-letter codes for the other view modes: 'icnv', 'clmv', 'Flwv'
 defaults write com.apple.finder FXPreferredViewStyle -string "Nlsv"
-
-# Shows Status Bar
-defaults write com.apple.finder ShowStatusBar -bool true;
-
-# Shows Path Bar
-defaults write com.apple.finder ShowPathbar -bool true;
-
-# New Finder windows now opens in /Users/<username>
+defaults write com.apple.finder ShowStatusBar -bool true
+defaults write com.apple.finder ShowPathbar -bool true
 defaults write com.apple.finder NewWindowTarget -string "PfHm"
-
-# Show hidden files in Finder
 defaults write com.apple.finder AppleShowAllFiles -bool true
+success "Configuring Finder preferences"
 
-# Stop xcode from opening last used projects - always ask what to open
+# Xcode settings
 defaults write com.apple.dt.Xcode ApplePersistenceIgnoreState -bool YES
+success "Configuring Xcode preferences"
 
-# ============== Prepare system ==============
+# Restart Finder to apply changes
+killall Finder 2>/dev/null
+success "Restarting Finder"
 
-# Restart Finder
-killall Finder
+# ============== Done ==============
+
+echo ""
+echo "🎉 ${BOLD}Setup complete!${NC}"
+echo ""
+echo "Next steps:"
+echo "  1. Restart your terminal to apply shell changes"
+echo "  2. Run ${BOLD}mise use --global node@lts${NC} to install Node.js"
+echo "  3. Run ${BOLD}mise use --global python@3.12${NC} to install Python"
+echo "  4. Import iTerm profile from console/Tomo-iTerm_profile.json (optional)"
+echo ""
