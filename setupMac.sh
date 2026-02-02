@@ -4,7 +4,6 @@
 
 CLI_APPS=(
     starship                              # Prompt - make console beautiful :)
-    mise                                  # Version manager (replaces nvm/rbenv/jenv/pyenv)
     swiftlint
     swift-format
     tuist
@@ -138,6 +137,21 @@ else
     success "Shell environment already configured"
 fi
 
+# ============== mise (Version Manager) ==============
+
+section "mise"
+
+# Install mise directly (not via brew) to enable autoupdate feature
+if ! command -v mise &> /dev/null; then
+    run_with_spinner "Installing mise" bash -c "curl -fsSL https://mise.run | sh"
+    if [ $? -eq 0 ]; then
+        # Add mise to current session
+        eval "$($HOME/.local/bin/mise activate bash)"
+    fi
+else
+    success "mise already installed"
+fi
+
 # ============== CLI Tools ==============
 
 section "CLI Tools"
@@ -199,6 +213,7 @@ defaults write com.apple.finder ShowStatusBar -bool true
 defaults write com.apple.finder ShowPathbar -bool true
 defaults write com.apple.finder NewWindowTarget -string "PfHm"
 defaults write com.apple.finder AppleShowAllFiles -bool true
+defaults write com.apple.finder FXDefaultSearchScope -string "SCcf"
 success "Configuring Finder preferences"
 
 # Xcode settings
